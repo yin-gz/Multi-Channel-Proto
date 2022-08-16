@@ -15,9 +15,10 @@ The TAC dataset is released via the Linguistic Data Consortium (LDC). Therefore,
 
 Run "./data/parse.py" to generate the sentences' dependency trees. Data after parsing should be put in `./data/origin_parse' directory.
 
+
 3. Download pretrain checkpoint
 
-Due to the large size, the pre-trained Glove files and BERT pretrain checkpoint are not included. You can download them [here](https://drive.google.com/drive/folders/1lXComU1HNd2dN4uU_SmUCpMosHbY5jF8?usp=sharing).
+Due to the large size, the pre-trained Glove files and BERT pretrain checkpoint are not included. You can download them [here](https://drive.google.com/drive/folders/1lXComU1HNd2dN4uU_SmUCpMosHbY5jF8?usp=sharing) to `./checkpoint` directory.
 
 Training a Model
 ---

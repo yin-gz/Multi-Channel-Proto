@@ -13,7 +13,7 @@ The TAC dataset is released via the Linguistic Data Consortium (LDC). Therefore,
 
 2. Generate parsed data
 
-Run "./data/parse.py" to generate the sentences' dependency trees. Data after parsing should be put in `./data/origin_parse' directory.
+Run `./data/parse.py` to generate the sentences' dependency trees. Data after parsing should be put in `./data/origin_parse' directory.
 
 
 3. Download pretrain checkpoint
@@ -29,7 +29,7 @@ Training a Model
 python train_demo.py --parse=True --save_ckpt=path_to_your_saved_model --cluster --M=2 --pseudo_pth=="train_wiki_and_pseudo_pubmed"
 ```
 
-3. Then, re-train the instance encoder
+2. Then, re-train the instance encoder
 ```shell
 python train_demo.py --parse=True --train="train_wiki_and_pseudo_pubmed" --save_ckpt=path_to_your_saved_model
 ```

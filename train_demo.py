@@ -21,7 +21,7 @@ import time
 #default hyper parameters
 class HP:
     # datasets
-    train_set = "train_wiki_and_pseudo_pubmed"
+    train_set = "train_wiki"
     val_set = "val_pubmed"
     test_set = "val_pubmed"
     adv_set = "unsupervised_pubmed"

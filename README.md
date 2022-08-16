@@ -54,7 +54,7 @@ python train_demo.py --model=pair --pair --encoder=bert --adv=None --hidden_size
 ```
 
 ## Reference
- If you make use of this code or the GroupIM algorithm in your work, please cite the following paper:
+ Please cite by:
 ```
 @article{YIN2022109470,
 title = {Cost-effective CNNs-based prototypical networks for few-shot relation classification across domains},

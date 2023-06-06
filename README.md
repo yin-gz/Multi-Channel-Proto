@@ -89,15 +89,15 @@ python train_demo.py \
 ### Correction Results on FewTAC
 |                   | 5 way 5 shot | 5 way 10 shot | 10 way 5 shot | 10 way 10 shot |
 |  ---------------  | -----------  | ------------- | ------------ | ------------- |
-| Proto+BERT (train_N=5, train_K=1)| 81.42	| 82.63 | 68.07	| 70.55 |
-| Proto+BERT (train_N=5, train_K=5)| 83.77 | 85.71 | 72.5 | 75.23 |
-| Proto+BERT+adv (train_N=5, train_K=5, λ=0.01)| 82.31 | 84.58 | 70.62 | 73.34 |
-| Proto+Dafec (train_N=5, train_K=5, λ=0.01)| 83.81 | 85.82 | 72.28 | 74.90 |
+| Proto-BERT (train_N=5, train_K=1)| 81.42	| 82.63 | 68.07	| 70.55 |
+| Proto-BERT (train_N=5, train_K=5)| 83.77 | 85.71 | 72.5 | 75.23 |
+| Proto-BERT+adv (train_N=5, train_K=5, λ=0.01)| 82.31 | 84.58 | 70.62 | 73.34 |
+| Proto-BERT+Dafec (train_N=5, train_K=5, λ=0.01)| 83.81 | 85.82 | 72.28 | 74.90 |
 | BERT-PAIR (train_N=5, train_K=1)| 84.16 | 85.67 | 73.18 | 75.23 |
 
 #### Note:
 - Adversarial training may not be always helpful and unstable on FewTAC, especially for BERT-based models. This may be due to the significant differences of sentence relation categories between TAC and WIKI.
-- Proto+BERT-based methods would cost large GPU memory and much time, especially when setting train_K to 5. In comparision, our proposed methods are more cost-effective.
+- Proto-BERT-based methods would cost large GPU memory and much time, especially when setting train_K to 5. In comparision, our proposed methods are more cost-effective.
 
 
 

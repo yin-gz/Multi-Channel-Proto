@@ -4,6 +4,7 @@ import os
 import numpy as np
 import random
 import json
+import time
 
 
 class FewRelDataset(data.Dataset):
@@ -26,6 +27,7 @@ class FewRelDataset(data.Dataset):
         self.encoder = encoder
 
     def __getraw__(self, item):
+
         word, pos1, pos2, mask = self.encoder.tokenize(item['tokens'],
                                                        item['h'],
                                                        item['t'])
@@ -39,8 +41,9 @@ class FewRelDataset(data.Dataset):
 
     def __getitem__(self, index):
         if len(self.classes) > 64:
-            target_classes1 = random.sample(self.classes[:-40], self.N // 2 + 2)
-            target_classes2 = random.sample(self.classes[-40:], self.N // 2 - 1)
+            # use only when retraining
+            target_classes1 = random.sample(self.classes[:-10], self.N - 1)
+            target_classes2 = random.sample(self.classes[-10:], 1)
             target_classes = target_classes1 + target_classes2
         else:
             target_classes = random.sample(self.classes, self.N)
@@ -53,14 +56,19 @@ class FewRelDataset(data.Dataset):
         na_classes = list(filter(lambda x: x not in target_classes,
                                  self.classes))
 
+        #First, sample self.N*self.Q query samples (every labeling with 0-self.N-1)
+        query_label_all = random.choices([i for i in range(self.N)], k = self.N*self.Q)
+        #Then, count query samples of each labeling
+        query_label_count = {k: query_label_all.count(k) for k in range(self.N)}
+
         for i, class_name in enumerate(target_classes):
             indices = np.random.choice(
-                list(range(len(self.json_data[class_name]))),
-                self.K + self.Q, False)
+                    list(range(len(self.json_data[class_name]))),
+                    self.K + query_label_count[i], False)
             count = 0
             for j in indices:
                 word, pos1, pos2, mask = self.__getraw__(
-                    self.json_data[class_name][j])
+                        self.json_data[class_name][j])
                 word = torch.tensor(word).long()
                 pos1 = torch.tensor(pos1).long()
                 pos2 = torch.tensor(pos2).long()
@@ -71,7 +79,7 @@ class FewRelDataset(data.Dataset):
                     self.__additem__(query_set, word, pos1, pos2, mask)
                 count += 1
 
-            query_label += [i] * self.Q
+            query_label += [i] * query_label_count[i]
 
         # NA
         for j in range(Q_na):
@@ -122,6 +130,7 @@ def collate_fn(data):
     for k in batch_query:
         batch_query[k] = torch.stack(batch_query[k], 0)
     batch_label = torch.tensor(batch_label)
+
     return batch_support, batch_query, batch_label
 
 
@@ -142,7 +151,7 @@ class FewRelDatasetPair(data.Dataset):
     FewRel Pair Dataset
     """
 
-    def __init__(self, name, encoder, N, K, Q, na_rate, root):
+    def __init__(self, name, encoder, N, K, Q, na_rate, root, encoder_name):
         self.root = root
         path = os.path.join(root, name + ".json")
         if not os.path.exists(path):
@@ -155,6 +164,7 @@ class FewRelDatasetPair(data.Dataset):
         self.Q = Q
         self.na_rate = na_rate
         self.encoder = encoder
+        self.encoder_name = encoder_name
         self.max_length = encoder.max_length
 
     def __getraw__(self, item):
@@ -179,10 +189,13 @@ class FewRelDatasetPair(data.Dataset):
         na_classes = list(filter(lambda x: x not in target_classes,
                                  self.classes))
 
+        query_label_all = random.choices([i for i in range(self.N)], k=self.N * self.Q)
+        query_label_count = {k: query_label_all.count(k) for k in range(self.N)}
+
         for i, class_name in enumerate(target_classes):
             indices = np.random.choice(
                 list(range(len(self.json_data[class_name]))),
-                self.K + self.Q, False)
+                self.K + query_label_count[i], False)
             count = 0
             for j in indices:
                 word = self.__getraw__(
@@ -193,7 +206,7 @@ class FewRelDatasetPair(data.Dataset):
                     query.append(word)
                 count += 1
 
-            query_label += [i] * self.Q
+            query_label += [i] * query_label_count[i]
 
         # NA
         for j in range(Q_na):
@@ -206,12 +219,30 @@ class FewRelDatasetPair(data.Dataset):
             query.append(word)
         query_label += [self.N] * Q_na
 
+        # shuffle query set
+        query_labels_new = []
+        query_new = []
+        rand_index = [i for i in range(len(query_label))]
+        # seed = str(time.time())[-4:]
+        # random.seed(seed)
+        random.shuffle(rand_index)
+        for index in rand_index:
+            query_labels_new.append(query_label[index])
+            query_new.append(query[index])
+        query = query_new
+        query_label = query_labels_new
+
         for word_query in query:
             for word_support in support:
-                SEP = self.encoder.tokenizer.convert_tokens_to_ids(['[SEP]'])
-                CLS = self.encoder.tokenizer.convert_tokens_to_ids(['[CLS]'])
+                if self.encoder_name == 'bert':
+                    SEP = self.encoder.tokenizer.convert_tokens_to_ids(['[SEP]'])
+                    CLS = self.encoder.tokenizer.convert_tokens_to_ids(['[CLS]'])
+                    word_tensor = torch.zeros((self.max_length)).long()
+                else:
+                    SEP = self.encoder.tokenizer.convert_tokens_to_ids(['</s>'])
+                    CLS = self.encoder.tokenizer.convert_tokens_to_ids(['<s>'])
+                    word_tensor = torch.ones((self.max_length)).long()
                 new_word = CLS + word_support + SEP + word_query + SEP
-                word_tensor = torch.zeros((self.max_length)).long()
                 for i in range(min(self.max_length, len(new_word))):
                     word_tensor[i] = new_word[i]
                 mask_tensor = torch.zeros((self.max_length)).long()
@@ -243,14 +274,14 @@ def collate_fn_pair(data):
 
 
 def get_loader_pair(name, encoder, N, K, Q, batch_size,
-                    num_workers=0, collate_fn=collate_fn_pair, na_rate=0, root='./data'):
-    dataset = FewRelDatasetPair(name, encoder, N, K, Q, na_rate, root)
+        num_workers=0, collate_fn=collate_fn_pair, na_rate=0, root='./data', encoder_name='bert'):
+    dataset = FewRelDatasetPair(name, encoder, N, K, Q, na_rate, root, encoder_name)
     data_loader = data.DataLoader(dataset=dataset,
-                                  batch_size=batch_size,
-                                  shuffle=False,
-                                  pin_memory=True,
-                                  num_workers=num_workers,
-                                  collate_fn=collate_fn)
+            batch_size=batch_size,
+            shuffle=False,
+            pin_memory=True,
+            num_workers=num_workers,
+            collate_fn=collate_fn)
     return iter(data_loader)
 
 

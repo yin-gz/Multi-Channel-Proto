@@ -197,7 +197,7 @@ if __name__ == "__main__":
     suffix = '_parse.json'
 
     #parse train and val
-    '''
+
     path_train = "./origin/train"
     files = os.listdir(path_train)
     for file in files:
@@ -235,7 +235,7 @@ if __name__ == "__main__":
                 obj_pos_all.append(instance['t'][-1][0])
             result = parse_list(tokens_all, subj_pos_all, obj_pos_all)
             f_out.write(json.dumps(result))
-    '''
+
 
 
     #parse test

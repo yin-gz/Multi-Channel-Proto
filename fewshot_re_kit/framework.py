@@ -123,7 +123,8 @@ class FewShotREFramework:
               na_rate=0,
               grad_iter=1,
               fp16=False,
-              pair=False
+              pair=False,
+              coef = 1.0
               ):
         print("Start training...")
     
@@ -184,7 +185,9 @@ class FewShotREFramework:
             own_state = model.state_dict()
             for name, param in state_dict.items():
                 if name not in own_state:
+                    print('ignore {}'.format(name))
                     continue
+                print('load {} from {}'.format(name, load_ckpt))
                 own_state[name].copy_(param)
 
         if fp16:
@@ -287,7 +290,7 @@ class FewShotREFramework:
                         torch.ones((total//2)).long()], 0)
 
                 dis_logits = self.d(features)
-                loss_dis = self.adv_cost(dis_logits, dis_labels)
+                loss_dis = coef * self.adv_cost(dis_logits, dis_labels)
                 _, pred = dis_logits.max(-1)
                 right_dis = float((pred == dis_labels).long().sum()) / float(total)
 
@@ -348,13 +351,14 @@ class FewShotREFramework:
         print("\n####################\n")
         print("Finish training " + model_name)
 
+
     def eval(self,
-             model,
-             B, N, K, Q,
-             eval_iter,
-             na_rate=0,
-             pair=False,
-             ckpt=None, test_online=False):
+         model,
+         B, N, K, Q,
+         eval_iter,
+         na_rate=0,
+         pair=False,
+         ckpt=None, test_online=False):
         print("")
 
         model.eval()
@@ -430,6 +434,75 @@ class FewShotREFramework:
                 #print(f"{N}-way-{K}-shot instance test time : {(end - begin):.2f}s")
             print("")
             return iter_right / iter_sample
+
+
+    """
+    def eval(self,
+             model,
+             B, N, K, Q,
+             eval_iter,
+             na_rate=0,
+             pair=False,
+             ckpt=None, test_online=False):
+        '''
+        model: a FewShotREModel instance
+        B: Batch size
+        N: Num of classes for each batch
+        K: Num of instances for each class in the support set
+        Q: Num of instances for each class in the query set
+        eval_iter: Num of iterations
+        ckpt: Checkpoint path. Set as None if using current model parameters.
+        return: Accuracy
+        '''
+        print("")
+
+        model.eval()
+        if ckpt is None:
+            print("Use val dataset")
+            eval_dataset = self.val_data_loader
+        else:
+            print("Use test dataset")
+            if ckpt != 'none':
+                state_dict = self.__load_model__(ckpt)['state_dict']
+                own_state = model.state_dict()
+                for name, param in state_dict.items():
+                    if name not in own_state:
+                        print('ignore {}'.format(name))
+                        continue
+                    print('load {} from {}'.format(name, ckpt))
+                    own_state[name].copy_(param)
+            eval_dataset = self.test_data_loader
+
+        iter_right = 0.0
+        iter_sample = 0.0
+        with torch.no_grad():
+            for it in range(eval_iter):
+                if pair:
+                    batch, label = next(eval_dataset)
+                    if torch.cuda.is_available():
+                        for k in batch:
+                            batch[k] = batch[k].cuda()
+                        label = label.cuda()
+                    logits, pred = model(batch, N, K, Q * N + Q * na_rate)
+                else:
+                    support, query, label = next(eval_dataset)
+                    if torch.cuda.is_available():
+                        for k in support:
+                            support[k] = support[k].cuda()
+                        for k in query:
+                            query[k] = query[k].cuda()
+                        label = label.cuda()
+                    logits, pred = model(support, query, N, K, Q * N + Q * na_rate)
+
+                right = model.accuracy(pred, label)
+                iter_right += self.item(right.data)
+                iter_sample += 1
+
+                sys.stdout.write('[EVAL] step: {0:4} | accuracy: {1:3.2f}%'.format(it + 1, 100 * iter_right / iter_sample) + '\r')
+                sys.stdout.flush()
+            print("")
+        return iter_right / iter_sample
+    """
 
     def cluster(self, model, ckpt, unlabel_dataset, n_clusters, pseudo_pth, feature_pth, M, origin_unsupervised_path, origin_train_path, root_path):
         def softmax(x, axis=None):

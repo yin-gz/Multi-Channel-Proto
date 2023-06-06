@@ -65,11 +65,15 @@ class FewRelDataset(data.Dataset):
         na_classes = list(filter(lambda x: x not in target_classes,
                                  self.classes))
 
+        #first, sample self.N*self.Q query samples (every labeling with 0-self.N-1)
+        query_label_all = random.choices([i for i in range(self.N)], k = self.N*self.Q)
+        query_label_count = {k: query_label_all.count(k) for k in range(self.N)}
+
         for i, class_name in enumerate(target_classes):
             #sample K+Q instances for each class
             indices = np.random.choice(
                 list(range(len(self.json_data[class_name]))),
-                self.K + self.Q, True)
+                self.K + query_label_count[i], False)
             count = 0
             for j in indices:
                 word, pos1, pos2, mask, subj_deprel, obj_deprel, subj_dis, obj_dis = self.__getraw__(self.json_data[class_name][j])
@@ -88,7 +92,7 @@ class FewRelDataset(data.Dataset):
                     self.__additem__(query_set, word, pos1, pos2, mask, subj_deprel, obj_deprel, subj_dis, obj_dis)
                 count += 1
 
-            query_label += [i] * self.Q
+            query_label += [i] * query_label_count[i]
 
         # NA
         for j in range(Q_na):
@@ -107,7 +111,7 @@ class FewRelDataset(data.Dataset):
 
         query_label += [self.N] * Q_na
 
-        # Shuffle among N*(K+Q) instances
+        # Shuffle
         query_labels_new = []
         batch_query_new = {'word': [], 'pos1': [], 'pos2': [], 'mask': [], 'subj_deprel': [],
                            'obj_deprel': [], 'subj_dis': [], 'obj_dis': []}
@@ -201,10 +205,14 @@ class FewRelDatasetPair(data.Dataset):
         na_classes = list(filter(lambda x: x not in target_classes,
                                  self.classes))
 
+        #first, sample self.N*self.Q query samples (every labeling with 0-self.N-1)
+        query_label_all = random.choices([i for i in range(self.N)], k = self.N*self.Q)
+        query_label_count = {k: query_label_all.count(k) for k in range(self.N)}
+
         for i, class_name in enumerate(target_classes):
             indices = np.random.choice(
                 list(range(len(self.json_data[class_name]))),
-                self.K + self.Q, False)
+                self.K + query_label_count[i], False)
             count = 0
             for j in indices:
                 word = self.__getraw__(
@@ -215,7 +223,7 @@ class FewRelDatasetPair(data.Dataset):
                     query.append(word)
                 count += 1
 
-            query_label += [i] * self.Q
+            query_label += [i] * query_label_count[i]
 
         # NA
         for j in range(Q_na):
@@ -227,6 +235,17 @@ class FewRelDatasetPair(data.Dataset):
                 self.json_data[cur_class][index])
             query.append(word)
         query_label += [self.N] * Q_na
+
+        #shuffle query set
+        query_labels_new = []
+        query_new = []
+        rand_index = [i for i in range(len(query_label))]
+        random.shuffle(rand_index)
+        for index in rand_index:
+            query_labels_new.append(query_label[index])
+            query_new.append(query[index])
+        query = query_new
+        query_label = query_labels_new
 
         for word_query in query:
             for word_support in support:

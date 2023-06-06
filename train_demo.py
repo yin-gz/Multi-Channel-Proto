@@ -24,8 +24,7 @@ class HP:
     train_set = "train_wiki"
     val_set = "val_pubmed"
     test_set = "val_pubmed"
-    adv_set = "unsupervised_pubmed"
-    #adv_set = None
+    adv_set = None
 
     # N-way K-shot settings
     batch_size = 4
@@ -33,7 +32,7 @@ class HP:
     N = 5
     K = 5
     Q = 5
-    
+
     # Model params
     model = "multi"
     encoder = "cnn"
@@ -45,19 +44,19 @@ class HP:
     # Multi channel encoder
     hybird_attention = True
     entity_size = 60  # context_size = hidden_size - 2*entity_size
-    parse = True #parse or not
+    parse = False  # parse or not
     parse_path = 'origin_parse'
     word_emb = 50
     pos_emb = 2
-    word_att = True
+    word_att = False
 
     # Joint learning
     n_clusters = 10
-    cluster = True
-    pseudo_pth = "train_wiki_and_pseudo_pubmed"
+    cluster = False
+    pseudo_pth = "train_wiki_and_pseudo_tac"
     feature_pth = "unlabel_features"
     M = 2  # select top 1/M, 0 denotes no selecting
-
+    coef = 0.01
 
     # Training params
     train_iter = 5000
@@ -78,13 +77,12 @@ class HP:
     only_test = False
 
     # Test on the official website
-    test_online = 'test_pubmed_input'
+    test_online = None
 
     # Others
     fp16 = False
     grad_iter = 1
     na_rate = 0
-    
 
 def main():
     arg_parser = argparse.ArgumentParser()
@@ -113,7 +111,7 @@ def main():
             help='model name')
     arg_parser.add_argument('--encoder', default=HP.encoder,
             help='encoder: cnn or bert')
-    arg_parser.add_argument('--pair', default=HP.pair,
+    arg_parser.add_argument('--pair',  action="store_true", default=HP.pair,
             help='use pair model')
     arg_parser.add_argument('--hidden_size', default=HP.hidden_size, type=int,
             help='hidden size')
@@ -127,7 +125,7 @@ def main():
             help='hybird attention')
     arg_parser.add_argument('--entity_size', default=HP.entity_size, type=int,
             help='entity_size')
-    arg_parser.add_argument('--parse', default=HP.parse,
+    arg_parser.add_argument('--parse', action="store_true", default=HP.parse,
             help='parse the context or not')
     arg_parser.add_argument('--parse_path', default=HP.parse_path,
             help='parse file path')
@@ -135,13 +133,13 @@ def main():
             help='hybird attention')
     arg_parser.add_argument('--pos_emb', default=HP.pos_emb, type=int,
             help='pos_size')
-    arg_parser.add_argument('--word_att', default=HP.word_att,
+    arg_parser.add_argument('--word_att', action="store_true", default=HP.word_att,
             help='word-level attention based on the dependency tree')
 
     # Joint learning
     arg_parser.add_argument('--n_clusters', default=HP.n_clusters, type=int,
            help='num of clusters')
-    arg_parser.add_argument('--cluster', default=HP.cluster, action="store_true",
+    arg_parser.add_argument('--cluster',  action="store_true", default=HP.cluster,
            help='cluster')
     arg_parser.add_argument('--pseudo_pth', default=HP.pseudo_pth)
     arg_parser.add_argument('--feature_pth', default=HP.feature_pth)
@@ -171,13 +169,15 @@ def main():
             help='adv enc lr')
     arg_parser.add_argument('--warmup_step', default=HP.warmup_step, type=int,
             help='warmup step')
+    arg_parser.add_argument('--coef', default=HP.coef,
+            help='weight of adversarial loss')
 
     # Load
     arg_parser.add_argument('--load_ckpt', default=HP.load_ckpt,
             help='load ckpt')
     arg_parser.add_argument('--save_ckpt', default=HP.save_ckpt,
             help='save ckpt')
-    arg_parser.add_argument('--only_test', action="store_true",default=HP.only_test,
+    arg_parser.add_argument('--only_test', action="store_true", default=HP.only_test,
             help='only test')
 
     # test on the official website
@@ -287,7 +287,6 @@ def main():
         raise NotImplementedError
     if opt.adv is not None:
         d = Discriminator(opt.hidden_size)
-        #d = Discriminator(opt.hidden_size - 2 * opt.entity_size)
         framework = FewShotREFramework(train_data_loader, val_data_loader, test_data_loader, adv_data_loader, adv=opt.adv, d=d)
     else:
         framework = FewShotREFramework(train_data_loader, val_data_loader, test_data_loader)
@@ -300,9 +299,9 @@ def main():
         prefix += '-na{}'.format(opt.na_rate)
     
     if model_name == 'proto':
-        model = Proto(sentence_encoder, shots =K, hidden_size=opt.hidden_size, drop_rate = opt.dropout)
+        model = Proto(sentence_encoder, drop_rate = opt.dropout)
     elif model_name == 'hatt':
-        model = ProtoHATT(sentence_encoder, shots =K, hidden_size=opt.hidden_size, drop_rate = opt.dropout)
+        model = ProtoHATT(sentence_encoder, shots = K, hidden_size = opt.hidden_size, drop_rate = opt.dropout)
     elif model_name == 'multi':
         if encoder_name == 'cnn':
             sentence_encoder = CNNSentenceEncoder(
@@ -370,7 +369,8 @@ def main():
                 save_ckpt=ckpt,
                 na_rate=opt.na_rate,
                 fp16=opt.fp16,
-                pair=opt.pair
+                pair=opt.pair,
+                coef = opt.coef
                 )
     else:
         ckpt = opt.load_ckpt
@@ -401,6 +401,8 @@ def main():
     if HP.test_online is not None:
         for n in [5,10]:
             for k in [1,5]:
+        #for n in [5,10]:
+            #for k in [1,5]:
                 print(f"{n}-way-{k}-shot")
                 test_file = HP.test_online+'-'+str(n)+'-' +str(k)
                 if opt.pair:
@@ -414,14 +416,15 @@ def main():
                 else:
                     root_path = './data/origin/test'
                     test_online_loader = get_loader_test(test_file, sentence_encoder, N=n, K=k, Q = 1, na_rate=opt.na_rate,
-                                              batch_size=100, root=root_path)
+                                              batch_size=50, root=root_path)
                 framework.test_data_loader = test_online_loader
                 # test for each configuration
                 #result = framework.eval(model, 100, HP.test_N, HP.test_K, 1, 100, na_rate=opt.na_rate, ckpt=ckpt, pair=opt.pair,test_online = True)
 
                 #test for four configurations
                 begin_total = time.time()
-                result = framework.eval(model, 100, n, k, 1, 100, na_rate=opt.na_rate, ckpt=ckpt,pair=opt.pair, test_online=True)
+                #when 10=5, adjust to 200
+                result = framework.eval(model, 100, n, k, 1, eval_iter=200, na_rate=opt.na_rate, ckpt=ckpt,pair=opt.pair, test_online=True)
                 end_total = time.time()
                 print(f"{n}-way-{k}-shot test time : {(end_total-begin_total):.2f}s")
                 pred_path = os.path.join(root_path,"pred-"+str(n)+"-"+str(k)+".json")
@@ -431,13 +434,14 @@ def main():
     # Test on local file
     else:
         for n in [5,10]:
-            #for k in range(1,11):
-            if n in [5,10]:
-                k_range = [5,10]
-            else:
-                k_range = [i for i in range(1,11)]
+            k_range = [5,10]
             for k in k_range:
-                if opt.parse is True:
+                if opt.pair:
+                    root_path = './data/origin/train'
+                    test_data_loader = get_loader_pair(opt.test, sentence_encoder,
+                                                       N=n, K=k, Q=1, na_rate=opt.na_rate, batch_size=batch_size,
+                                                       root=root_path)
+                elif opt.parse is True:
                     root_path = './data/'+opt.parse_path+'/train'
                     test_data_loader = get_loader_parse(opt.test, sentence_encoder, N=n, K=k, Q=Q, na_rate=opt.na_rate,
                                               batch_size=batch_size, root=root_path)
@@ -452,5 +456,4 @@ def main():
 
 
 if __name__ == "__main__":
-    for i in range(0,1):
-        main()
+    main()
